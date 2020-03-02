@@ -1,0 +1,315 @@
+
+```{r}
+library(ggplot2)
+library(MASS)
+library(caret)
+library(glmnet)
+library(tidyr)
+library(dplyr)
+
+library(geosphere)
+
+library(ggplot2)
+
+library(class) #knn
+library(caret) #knn
+
+library(rpart) #tree
+
+library(rattle)	
+library(rpart.plot) #tree
+```
+
+
+```{r}
+train <- read.table("train_petit.csv", header=TRUE, sep=",")
+summary(train)
+
+#remplacer les valeurs numériques par des classes a ou b pour eviter que la colonne soit considérée comme un entier
+
+
+for(i in (1:length(train[,1])))
+{
+  if(train[i,2]==1)
+  {
+    train[i,2]<-'a'
+  }
+  else
+  {
+    train[i,2]<-'b'
+  }
+  
+}
+
+test <- read.table("test_petit.csv", header = TRUE, sep = ",")
+summary(test)
+
+for(i in (1:length(test[,1])))
+{
+  if(test[i,2]==1)
+  {
+    test[i,2]<-'a'
+  }
+  else
+  {
+    test[i,2]<-'b'
+  }
+}
+
+
+
+distance<-function(lon_a,lat_a,lon_b,lat_b){
+  d<-c()
+  for(i in (1:length(lon_a)))
+  {
+    d<-c(d,distm(c(lon_a[i],lat_a[i]),c(lon_b[i],lat_b[i]),fun=distHaversine))
+  }
+  return(d)
+}
+
+```
+
+
+```{r}
+#La colonne 3 correspond à la date de depart de la course
+
+#dans la colonne 3 qui contient les dates on récupère les 4 premiers caractères qui correspondent à des années
+train["year_pickup"]<-substring(train[,3],1,4) 
+
+#dans la colonne 3 qui contient les dates on récupère le 6ième et 7ième caractères qui correspondent à des mois
+train["month_pickup"]<-substring(train[,3],6,7)
+
+#dans la colonne 3 qui contient les dates on récupère le 9ième et 10ième caractères qui correspondent à des mois
+train["day_pickup"]<-substring(train[,3],9,10)
+
+#récupérer le jour de la semaine en utilisant la date
+train["weekday_pickup"]<-weekdays(as.Date(train[,3]))
+
+#dans la colonne 3 qui contient les dates on récupère le 12ième et 13ième caractères qui correspondent à l'heur
+train["hour_pickup"]<-substring(train[,3],12,13)
+
+#dans la colonne 3 qui contient les dates on récupère le 15ième et 16ième caractères qui correspondent aux minutes
+train["min_pickup"]<-substring(train[,3],15,16)
+
+#dans la colonne 3 qui contient les dates on récupère le 18ième et 19ième caractères qui correspondent aux secondes
+train["sec_pickup"]<-substring(train[,3],18,19)
+
+
+
+
+#même chose mais avec la colonne 4
+
+train["year_dropoff"]<-substring(train[,4],1,4)
+
+train["month_dropoff"]<-substring(train[,4],6,7)
+
+train["day_dropoff"]<-substring(train[,4],9,10)
+
+train["weekday_dropoff"]<-weekdays(as.Date(train[,4]))
+
+train["hour_dropoff"]<-substring(train[,4],12,13)
+
+train["min_dropoff"]<-substring(train[,4],15,16)
+
+train["sec_dropoff"]<-substring(train[,4],18,19)
+
+
+# On ajoute une colonne correspondant à la distance euclidienne
+
+train["distance"]<-distance(train$pickup_longitude,train$pickup_latitude,train$dropoff_longitude,train$dropoff_latitude)
+
+
+#mettre dans dans drops les noms des colonnes à retirer
+# on retire les colonnes des drop_off et pick_up car on ne travail que sur le temps de trajet
+# on retire également la colonne store_and_fwd_flag car en toute apparence cette colonne ne semble pas être pertinente
+# on retire id car le nombre d'identifiants est pour l'instant trop important pour que son étude soit lisible
+drops<-c("year_pickup","month_pickup","day_pickup","min_pickup","sec_pickup","year_dropoff","month_dropoff","day_dropoff","weekday_dropoff","hour_dropoff","min_dropoff","sec_dropoff","pickup_datetime","dropoff_datetime","id")
+
+# on retire pour l'instant year_pickup car sur les données il y a peu de variations sur cette colonne
+drops<-c(drops,"year_pickup")
+
+numtrain<-train[,!(names(train) %in% drops)]
+
+#on initialise la liste des lignes à retirer à une liste vide
+removed_rows<-c()
+
+#on boucle et on met dans la liste les lignes ou les duree excedent 10000 secondes
+for(i in (1:nrow(numtrain)))
+{
+  if(numtrain$trip_duration[i]>10000)
+  {
+    removed_rows<-c(removed_rows,i)
+  }
+  
+}
+
+
+
+#on reire les lignes en question
+numtrain<-numtrain[-removed_rows,]
+
+numtrain
+
+
+removed_rows<-c()
+#on boucle et on met dans la liste les lignes ou la vitesse excedent un seuil
+for(i in (1:nrow(numtrain)))
+{
+  if((numtrain$distance[i]/numtrain$trip_duration[i])>8)
+  {
+    removed_rows<-c(removed_rows,i)
+  }
+  
+}
+
+
+
+#on reire les lignes en question
+numtrain<-numtrain[-removed_rows,]
+
+numtrain
+
+
+res <- glm(trip_duration ~., data=numtrain)
+summary(res)
+
+
+
+predicted <- predict.glm(res,type=c("response"))
+#View(predicted)
+
+plot(numtrain$"trip_duration",predicted)
+
+print(paste("linear regression :",sqrt(mean((numtrain$"trip_duration"-predicted)**2))
+            ))
+
+
+```
+
+
+```{r visualisation}
+
+plot(numtrain[is.element(numtrain$weekday_pickup, 'lundi'),]$distance/numtrain[is.element(numtrain$weekday_pickup, 'lundi'),]$trip_duration)
+plot(numtrain[is.element(numtrain$weekday_pickup, 'mardi'),]$distance/numtrain[is.element(numtrain$weekday_pickup, 'mardi'),]$trip_duration)
+plot(numtrain[is.element(numtrain$weekday_pickup,'mercredi'),]$distance/numtrain[is.element(numtrain$weekday_pickup, 'mercredi'),]$trip_duration)
+plot(numtrain[is.element(numtrain$weekday_pickup, 'jeudi'),]$distance/numtrain[is.element(numtrain$weekday_pickup, 'jeudi'),]$trip_duration)
+plot(numtrain[is.element(numtrain$weekday_pickup, 'vendredi'),]$distance/numtrain[is.element(numtrain$weekday_pickup, 'vendredi'),]$trip_duration)
+plot(numtrain[is.element(numtrain$weekday_pickup, 'samedi'),]$distance/numtrain[is.element(numtrain$weekday_pickup, 'samedi'),]$trip_duration)
+plot(numtrain[is.element(numtrain$weekday_pickup, 'dimanche'),]$distance/numtrain[is.element(numtrain$weekday_pickup, 'dimanche'),]$trip_duration)
+
+```
+
+
+```{r}
+resTrain <- glm(trip_duration ~., data=numtrain) 
+resTrain <- step(na.omit(resTrain),direction='both')
+summary(resTrain)
+predictedTrain <- predict.glm(resTrain,type=c("response"))
+
+predicted_step <- predict.glm(res,type=c("response"))
+
+
+plot(numtrain$"trip_duration",predicted_step)
+
+print(paste("predict step :",sqrt(mean((numtrain$"trip_duration"-predicted_step)**2))
+            ))
+```
+
+
+
+```{r}
+
+lambda_seq <- seq(0, 100, by = 0.1)
+
+X<-model.matrix(trip_duration~.,numtrain)
+ridge_output<-cv.glmnet(X, numtrain$trip_duration, 
+                         alpha = 0, lambda = lambda_seq)
+
+best_ridge_lambda<-ridge_output$lambda.min
+
+ridge_best<-glmnet(X,numtrain$trip_duration,alpha=0,lambda=best_ridge_lambda)
+predicted_ridge <- predict.glmnet(ridge_best,newx=X,type=c("response"))
+
+plot(numtrain$"trip_duration",predicted_ridge)
+
+print(paste("predict ridge :",sqrt(mean((numtrain$"trip_duration"-predicted_ridge)**2))
+            ))
+
+
+```
+
+
+```{r}
+
+
+lambda_seq <- seq(0, 100, by = 0.1)
+
+X<-model.matrix(trip_duration~.,numtrain)
+lasso_output<-cv.glmnet(X, numtrain$trip_duration, 
+                         alpha = 1, lambda = lambda_seq)
+
+best_lasso_lambda<-lasso_output$lambda.min
+
+lasso_best<-glmnet(X,numtrain$trip_duration,alpha=1,lambda=best_lasso_lambda)
+predicted_lasso <- predict.glmnet(lasso_best,newx=X,type=c("response"))
+
+plot(numtrain$"trip_duration",predicted_lasso)
+
+print(paste("predict lasso :",sqrt(mean((numtrain$"trip_duration"-predicted_lasso)**2))
+            ))
+
+```
+
+```{r}
+set.seed(300)
+
+knn_numtrain<-numtrain[,-which(names(numtrain) %in% c("weekday_pickup","vendor_id"))]
+
+knn_numtrain["week_day"]<-rep(0,nrow(knn_numtrain))
+
+for(i in (1:nrow(knn_numtrain)))
+{
+  if((numtrain$weekday_pickup[i]=="dimanche")||(numtrain$weekday_pickup[i]=="samedi"))
+  {
+    knn_numtrain$week_day[i]<-1
+  }
+}
+
+indxTrain <- createDataPartition(y = knn_numtrain$trip_duration,p = 0.75,list = FALSE)
+training <- knn_numtrain[indxTrain,]
+testing <- knn_numtrain[-indxTrain,]
+
+
+trainX <- training[,names(training) != "trip_duration"]
+preProcValues <- preProcess(x = trainX,method = c("center", "scale"))
+preProcValues
+
+
+set.seed(400)
+ctrl <- trainControl(method="repeatedcv",repeats = 3) #,classProbs=TRUE,summaryFunction = twoClassSummary)
+knnFit <- train(trip_duration ~ ., data = training, method = "knn", trControl = ctrl, preProcess = c("center","scale"), tuneLength = 20)
+
+#Output of kNN fit
+knnFit
+
+knnPredict <- predict(knnFit,newdata = testing )
+
+plot(testing$trip_duration,knnPredict)
+
+print(paste("knn predict rmse :",sqrt(mean((testing$trip_duration-knnPredict)**2))))
+```
+
+
+```{r}
+tree_output<-rpart(trip_duration~.,data=numtrain, method="anova")
+predictedTree <- predict(tree_output,newdata=numtrain) 
+
+plot(numtrain$"trip_duration",predictedTree)
+
+print(paste("tree predict rmse :",sqrt(mean((numtrain$"trip_duration"-predictedTree)**2))
+            ))
+
+
+prp(tree_output)
+```
+

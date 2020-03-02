@@ -1,0 +1,30 @@
+```{r}
+train<-read.csv('C:/Users/Alexandre/Documents/ENSIIE/S4/Kaggle_taxi/kaggle-taxi/train_petit.csv', TRUE,sep=",")
+```
+
+
+
+```{r}
+library(geosphere)
+```
+
+```{r}
+distm(c(train$pickup_longitude[1],train$pickup_latitude[1]),c(train$dropoff_longitude[1],train$dropoff_latitude[1]),fun=distHaversine)
+```
+
+```{r}
+for (k in (1:20)){
+  d=distm(c(train$pickup_longitude[k],train$pickup_latitude[k]),c(train$dropoff_longitude[k],train$dropoff_latitude[k]),fun=distHaversine)/1000
+  print(d)
+}
+```
+
+```{r}
+library(geosphere)
+
+distance<-function(lon_a,lat_a,lon_b,lat_b){
+  d=distm(c(lon_a,lat_a),c(lon_b,lat_b),fun=distHaversine)/1000 # en km
+  return(d)
+}
+```
+

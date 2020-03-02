@@ -1,0 +1,18 @@
+TO DO :
+
+1) faire des classes par tranches d'heure à déterminer et faire tourner les modèles sur chaque classe
+
+2) Obtenir une mesure numérique de la densité du traffic pour un jour et une heure donnée (colonne a ajouter) 
+
+distance a vol d'oiseau a la place des longitudes et tout
+
+4) enlever les données suspectes (duree de - de 10s ou de plus de 8000s)
+
+5) gerer le creu de voyages en fin janvier (23/24 densité très faible)
+
+6) 
+
+obtenir le score en fct de la mesure donnée [  RMSE(log(Y0), log(Y_lm)   ]
+
+
+n) améliorer le modèle avec d'autres régressions / classifications (SVM / autre)

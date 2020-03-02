@@ -1,0 +1,272 @@
+---
+title: "Wil 50000 lignes"
+author: "Shi de Milleville Guillaume Acheroufkebir Yacine Ranger Alexandre"
+date: "13/02/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#  Paramètres
+
+Les paramètres sont les suivants :
+
+__*id*__ caractère : identifiant du trajet
+__*vendor_id*__ entier : identifiant de la compagnie
+__*pickup_datetime*__ caractère : heure du début de la course
+__*passenger_count*__ entier : nombre de passagers
+__*pickup_longitude*__ nombre décimal : longitude au début de la course
+__*pickup_latitude*__ nombre décimal : latitude au début de la course
+__*dropoff_longitude*__ nombre décimal : longitude en fin de course
+__*dropoff_latitude*__ nombre décimal : latitude en fin de course
+__*store_and_fwd_flag*__ caractère : indique si la course a été enregistrée dans la mémire du véhicule avant d'être envoyée à la compagnie à cause d'une mauvaise connection
+__*trip_duration*__ entier : nombre de seconde de la course
+
+
+
+```{r}
+library(ggplot2)
+library(MASS)
+library(caret)
+library(glmnet)
+library(tidyr)
+library(dplyr)
+library("cowplot")
+library("gridExtra")
+library(gridExtra)
+library(carat)
+```
+
+
+```{r}
+train <- read.table("train50000.csv", header=TRUE, sep=",")
+
+```
+
+```{r}
+THRESHOLD <- 10000
+numtrain_3 <- train
+numtrain_3["hour_pickup"]<-substring(numtrain_3[,3],12,13)
+numtrain_3["day"]<-weekdays(as.Date(train[,3]))
+# on enlève les colonnes dont les valeurs ne sont pas numériques
+
+
+drops<-c("id", "dropoff_datetime", "pickup_datetime", "store_and_fwd_flag")
+numtrain_3<-numtrain_3[,!(names(numtrain_3) %in% drops)]
+
+
+numtrain_3[1] <- numtrain_3[1] -1    # on enleve 1 pour le num de la compagnie comme ça on a soit 0 soit 1. Si on a une moyenne de 0.6 on sait que 60% des usagers ont utilisé la compagnie 2
+
+# for (i in (1:length(numtrain[])))
+# numtrain["trip_duration"]<-as.integer(numtrain["trip_duration"])
+
+# on conserve dans top les indices des lignes contenant les valeurs extrèmes
+
+
+removed_rows<-c()
+
+for(i in (1:nrow(numtrain_3)))
+{
+  if(numtrain_3$trip_duration[i]>THRESHOLD)
+  {
+    removed_rows<-c(removed_rows,i)
+  }
+  
+}
+
+numtrain_reduced_3<-numtrain_3[-removed_rows,]
+numtrain_reduced_3
+```
+
+
+```{r}
+LONGUEUR <- length(numtrain_reduced_3[,1])
+numtrain_reduced_hours <- numtrain_reduced_3
+numtrain_reduced_hours$hour_pickup <- as.integer(numtrain_reduced_3$hour_pickup) # conversion des characrères en entiers pour utiliser if (truc = 1|2|3)
+
+```
+
+```{r}
+numtrain_78910 <- c()
+for (i in (1:length(numtrain_reduced_hours[,1]))){
+  if (
+    ((numtrain_reduced_hours$hour_pickup[i]==3)&(numtrain_reduced_hours$day[i]=="lundi"))
+    |((numtrain_reduced_hours$hour_pickup[i]==4)&(numtrain_reduced_hours$day[i]=="lundi"))
+    )
+    {
+    numtrain_78910 <- rbind(numtrain_78910, numtrain_reduced_hours[i,])
+  }
+}
+
+
+drops<-c("hour_pickup", "day")
+numtrain_78910<-numtrain_78910[,!(names(numtrain_78910) %in% drops)]
+numtrain_78910 
+```
+
+
+
+```{r}
+drops<-c("trip_duration")
+X  = numtrain_78910[,!(names(numtrain_78910) %in% drops)]
+Xm = cbind(rep(1,nrow(X)), X)
+
+
+
+Xm = cbind(rep(1,nrow(X)), X)
+
+
+
+Y = as.data.frame(numtrain_78910[length(numtrain_78910[1,])])
+Ym = as.matrix(Y)
+
+
+
+reg = lm(trip_duration~., data=numtrain_78910)
+Y0 = as.matrix(Xm)%*%as.matrix(coef(reg))
+g1 <- ggplot(data.frame(Y0, Ym), aes(Y0, Ym)) +
+    geom_point(aes(Y0, Ym)) +
+    geom_abline(slope=1, intercept=0) +
+    ggtitle("                       linear")
+
+
+
+ridgeCV = cv.glmnet(x=as.matrix(X), y=as.matrix(Y), alpha=0)
+ridge = glmnet(x=as.matrix(X), y=as.matrix(Y), alpha=0, lambda=ridgeCV$lambda.min)
+Yr = as.matrix(Xm)%*%as.matrix(coef(ridge))
+colnames(Yr) = c()
+g2 <- ggplot(data.frame(Yr, Ym), aes(Yr, Ym)) +
+    geom_point(aes(Yr, Ym)) +
+    geom_abline(slope=1, intercept=0) +
+    ggtitle("                       ridge")
+
+
+
+lassoCV = cv.glmnet(x=as.matrix(X), y=as.matrix(Y), alpha=1)
+lasso = glmnet(x=as.matrix(X), y=as.matrix(Y), alpha=0, lambda=lassoCV$lambda.min)
+Yl = as.matrix(Xm)%*%as.matrix(coef(lasso))
+colnames(Yl) = c()
+g3 <- ggplot(data.frame(Yl, Ym), aes(Yl, Ym)) +
+    geom_point(aes(Yl, Ym)) +
+    geom_abline(slope=1, intercept=0) +
+    ggtitle("                       lasso")
+
+
+
+step = step(reg, direction="both", trace=0)
+Ys = predict.lm(step)
+g4 <- ggplot(data.frame(Ys, Ym), aes(Ys, Ym)) +
+    geom_point(aes(Ys, Ym)) +
+    geom_abline(slope=1, intercept=0) +
+    ggtitle("                       step")
+
+grid.arrange(g1, g2, g3, g4, ncol=2, nrow = 2) #g5, g6, ncol=3, nrow = 2)
+
+colnames(Ym) = c()
+```
+
+
+
+
+```{r}
+Linear_R2 = c()
+Ridge_R2 = c()
+Lasso_R2 = c()
+Step_R2 = c()
+
+Linear_RMSE = c()
+Ridge_RMSE = c()
+Lasso_RMSE = c()
+Step_RMSE = c()
+
+
+n = nrow(numtrain_78910)
+K = 4
+
+list_index = sample((1:n), n)
+len_fold = as.integer(n/K)
+folds = matrix(0, K, len_fold)
+for (k in (1:K))
+{
+  fold = list_index[ ((k-1)*len_fold+1) : (k*len_fold)  ]
+  folds[k,] = fold
+}
+```
+
+
+
+```{r}
+
+for (k in (1:K))
+{
+  X_k = X[folds[k,],]
+  X_km = cbind(rep(1,len_fold), X_k)
+
+  Y_k = as.data.frame(numtrain_78910[length(numtrain_78910[1,])])[folds[k,],]
+  Y_km = as.matrix(Y_k)
+
+
+
+  data_k = numtrain_78910[folds[k,],]
+  reg = lm(trip_duration~., data=data_k)
+  tmp = coef(reg)
+  tmp[is.na(tmp)] = 0
+  Y0 = as.matrix(X_km)%*%as.matrix(tmp)
+
+
+
+  ridgeCV = cv.glmnet(x=as.matrix(X_k), y=as.matrix(Y_k), alpha=0)
+  ridge = glmnet(x=as.matrix(X_k), y=as.matrix(Y_k), alpha=0, lambda=ridgeCV$lambda.min)
+  tmp = coef(ridge)
+  tmp[is.na(tmp)] = 0
+  Yr = as.matrix(X_km)%*%as.matrix(tmp)
+  colnames(Yr) = c()
+
+
+
+  lassoCV = cv.glmnet(x=as.matrix(X_k), y=as.matrix(Y_k), alpha=1)
+  lasso = glmnet(x=as.matrix(X_k), y=as.matrix(Y_k), alpha=0, lambda=lassoCV$lambda.min)
+  tmp = coef(lasso)
+  tmp[is.na(tmp)] = 0
+  Yl = as.matrix(X_km)%*%as.matrix(tmp)
+  colnames(Yl) = c()
+}
+
+  step = step(reg, direction="both", trace=0)
+  Ys = predict.lm(step)
+  
+  Linear_R2 = c(Linear_R2, R2(Y0, Y_km))
+  Ridge_R2 = c(Ridge_R2, R2(Yr, Y_km))
+  Lasso_R2 = c(Lasso_R2, R2(Yl, Y_km))
+  Step_R2 = c(Step_R2, R2(Ys, Y_km))
+              
+  Linear_RMSE = c(Linear_RMSE, RMSE(Y0, Y_km))
+  Ridge_RMSE = c(Ridge_RMSE, RMSE(Yr, Y_km))
+  Lasso_RMSE = c(Lasso_RMSE, RMSE(Yl, Y_km))
+  Step_RMSE = c(Step_RMSE, RMSE(Ys, Y_km))
+
+
+data.frame(
+  moy_Linear_R2 = mean(Linear_R2),
+  moy_Ridge_R2 = mean(Ridge_R2),
+  moy_Lasso_R2 = mean(Lasso_R2),
+  moy_Step_R2 = mean(Step_R2)
+)
+  
+  
+data.frame(
+  moy_Linear_RMSE = mean(Linear_RMSE),
+  moy_Ridge_RMSE = mean(Ridge_RMSE),
+  moy_Lasso_RMSE = mean(Lasso_RMSE),
+  moy_Step_RMSE = mean(Step_RMSE)
+)
+
+
+
+boxplot(Linear_R2, Ridge_R2, Lasso_R2, Step_R2, names=c("Linear_R2", "Ridge_R2", "Lasso_R2", "Step_R2"))
+boxplot(Linear_RMSE, Ridge_RMSE, Lasso_RMSE, Step_RMSE, names=c("Linear_RMSE", "Ridge_RMSE", "Lasso_RMSE", "Step_RMSE"))
+```
+
+

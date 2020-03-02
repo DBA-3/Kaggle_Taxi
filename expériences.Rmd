@@ -1,0 +1,52 @@
+---
+title: "experiment"
+author: "Shi de Milleville Guillaume Acheroufkebir Yacine Ranger Alexandre"
+date: "24/02/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(MASS)
+library(caret)
+library(glmnet)
+library(tidyr)
+library(dplyr)
+library("cowplot")
+library("gridExtra")
+library(gridExtra)
+library(carat)
+```
+
+```{r}
+train <- read.table("train50000.csv", header=TRUE, sep=",")
+```
+
+
+```{r}
+p1 <- train %>%
+  mutate(hpick = hour(pickup_datetime),
+         Month = factor(month(pickup_datetime, label = TRUE))) %>%
+  group_by(hpick, Month) %>%
+  count() %>%
+  ggplot(aes(hpick, n, color = Month)) +
+  geom_line(size = 1.5) +
+  labs(x = "Hour of the day", y = "count")
+
+p2 <- train %>%
+  mutate(hpick = hour(pickup_datetime),
+         wday = factor(wday(pickup_datetime, label = TRUE, week_start = 1))) %>%
+  group_by(hpick, wday) %>%
+  count() %>%
+  ggplot(aes(hpick, n, color = wday)) +
+  geom_line(size = 1.5) +
+  labs(x = "Hour of the day", y = "count")
+
+layout <- matrix(c(1,2),2,1,byrow=FALSE)
+multiplot(p1, p2, layout=layout)
+```
+
